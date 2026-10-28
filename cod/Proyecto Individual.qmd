@@ -1,0 +1,367 @@
+---
+title: "Proyecto Individual Ca-204"
+format: typst
+editor: visual
+echo: False
+---
+
+## Pregunta
+
+¿Qué equipos de la UEFA Champions League enfrentan un calendario más difícil y qué factores explican esa dificultad?
+
+## Modelo a utilizar
+
+$$D_i = \frac{1}{n_i}\sum_{j=1}^{n_i}d_{ij}$$
+
+En donde:
+
+$D_i$ es la difucultad media del calendario del equipo i\
+$n_i$ es la cantidad de partidos disputados por el equipo i\
+$d_{ij}$ esta dado por:
+
+$$d_{ij} = \frac{100}{1+10^{\frac{E_i - E_j + H}{400}}}$$
+
+En esta ecuación:
+
+$E_{i}$ es la puntuación de elo del equipo i\
+$L_{ij}$ es la puntuación de elo del equipo j\
+$H$ es el ajuste por jugar en casa (localía)\
+
+```{r,message=FALSE}
+library(dplyr)
+library(stringr)
+library(tibble)
+
+lineas <- readLines(
+  "champions_league_2025_26.txt",
+  encoding = "UTF-8"
+)
+
+jornada <- NA_integer_
+en_liga <- FALSE
+partidos <- list()
+
+for (linea in lineas) {
+
+  # Detectar el inicio de la fase de liga
+  if (str_detect(linea, "^▪ League,")) {
+    en_liga <- TRUE
+    jornada <- as.integer(str_extract(linea, "\\d+"))
+    next
+  }
+
+  # Detenerse al llegar a otra fase
+  if (str_detect(linea, "^▪ ") && en_liga) {
+    en_liga <- FALSE
+  }
+
+  # Actualizar la jornada
+  if (en_liga &&
+      str_detect(linea, "League, Matchday")) {
+    jornada <- as.integer(str_extract(linea, "\\d+"))
+  }
+
+  # Extraer únicamente partidos de la fase de liga
+  if (en_liga &&
+      str_detect(linea, "\\bv\\b") &&
+      str_detect(linea, "\\d+-\\d+")) {
+
+    patron <- paste0(
+      "^\\s*(?:\\d{2}:\\d{2}\\s+)?",
+      "(.+?)\\s+v\\s+",
+      "(.+?)\\s+",
+      "(\\d+)-(\\d+)"
+    )
+
+    resultado <- str_match(linea, patron)
+
+    if (!is.na(resultado[1, 1])) {
+      partidos[[length(partidos) + 1]] <- tibble(
+        jornada = jornada,
+        local = str_trim(resultado[1, 2]),
+        visitante = str_trim(resultado[1, 3]),
+        goles_local = as.integer(resultado[1, 4]),
+        goles_visitante = as.integer(resultado[1, 5])
+      )
+    }
+  }
+}
+
+calendario <- bind_rows(partidos)
+```
+
+```{r}
+elo <- tribble(
+  ~equipo, ~elo,
+  "Athletic Club (ESP)", 2087,
+  "Arsenal FC (ENG)", 2277,
+  "PSV (NED)", 2083,
+  "Royale Union Saint-Gilloise (BEL)", 2050,
+  "Juventus FC (ITA)", 2100,
+  "Borussia Dortmund (GER)", 2178,
+  "Sport Lisboa e Benfica (POR)", 2154,
+  "Qarabağ Ağdam FK (AZE)", 1789,
+  "Tottenham Hotspur FC (ENG)", 2085,
+  "Villarreal CF (ESP)", 2099,
+  "Real Madrid CF (ESP)", 2268,
+  "Olympique de Marseille (FRA)", 2028,
+  "SK Slavia Praha (CZE)", 2045,
+  "FK Bodø/Glimt (NOR)", 1936,
+  "PAE Olympiakos SFP (GRE)", 2060,
+  "Paphos FC (CYP)", 1845,
+  "AFC Ajax (NED)", 1936,
+  "FC Internazionale Milano (ITA)", 2221,
+  "Liverpool FC (ENG)", 2295,
+  "Club Atlético de Madrid (ESP)", 2164,
+  "Paris Saint-Germain FC (FRA)", 2334,
+  "Atalanta BC (ITA)", 2115,
+  "FC Bayern München (GER)", 2265,
+  "Chelsea FC (ENG)", 2220,
+  "FC København (DEN)", 1976,
+  "Bayer 04 Leverkusen (GER)", 2146,
+  "Club Brugge KV (BEL)", 2094,
+  "AS Monaco FC (MCO)", 2054,
+  "Newcastle United FC (ENG)", 2147,
+  "FC Barcelona (ESP)", 2317,
+  "Manchester City FC (ENG)", 2225,
+  "SSC Napoli (ITA)", 2143,
+  "Eintracht Frankfurt (GER)", 2075,
+  "Galatasaray SK (TUR)", 2072,
+  "Sporting Clube de Portugal (POR)", 2127,
+  "FK Kairat (KAZ)", 1659
+)
+
+elo <- elo %>% 
+  mutate(
+    elo.ajustado = round(100*(elo-min(elo))/(max(elo)-min(elo)),2)
+  )
+```
+
+```{r}
+nombres <- elo %>% 
+  select(
+    -elo, -elo.ajustado
+  )
+```
+
+```{r}
+calcular.d <- function(equipo1,equipo2,H=100){
+  elo.1 <- elo$elo[elo$equipo==equipo1]
+  elo.2 <- elo$elo[elo$equipo==equipo2]
+  
+  partido <- calendario[(calendario$local == equipo1 & calendario$visitante == equipo2) |
+                        (calendario$local == equipo2 &calendario$visitante == equipo1),
+                       ]  
+  
+  if (nrow(partido) != 1) {
+    stop("No se encontró un partido único entre esos equipos.")
+  }
+  if (partido$local == equipo1) {
+    elo.1 <- elo.1 + H
+  } else {
+    elo.2 <- elo.2 + H
+  }
+  
+  factor.elo <- 100 / (1 + 10^((elo.1 - elo.2) / 400))
+
+  return(factor.elo)
+
+}
+
+
+```
+
+```{r}
+calendario <- calendario %>% 
+  rowwise() %>% 
+  mutate(
+    d.local = calcular.d(local,visitante),
+    d.visitante= calcular.d(visitante,local)
+  ) %>% 
+  ungroup()
+```
+
+```{r}
+dificultad <- bind_rows(
+  calendario %>%
+    group_by(equipo = local) %>%
+    summarise(
+      D = mean(d.local),
+      n = n(),
+      .groups = "drop"
+    ),
+  calendario %>%
+    group_by(equipo = visitante) %>%
+    summarise(
+      D = mean(d.visitante),
+      n = n(),
+      .groups = "drop"
+    )
+) %>%
+  group_by(equipo) %>%
+  summarise(
+    D = mean(D),
+    n = sum(n),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(D))
+
+dificultad <- dificultad %>% 
+  mutate(D= round(D,2))
+```
+
+```{r}
+
+archivo <- "champions_league_2025_26.txt"
+
+lineas <- readLines(archivo, encoding = "UTF-8")
+
+en_liga <- FALSE
+jornada <- NA_integer_
+fecha_actual <- as.Date(NA)
+partidos <- list()
+
+meses <- c(
+  Jan = "01", Feb = "02", Mar = "03",
+  Apr = "04", May = "05", Jun = "06",
+  Jul = "07", Aug = "08", Sep = "09",
+  Oct = "10", Nov = "11", Dec = "12"
+)
+
+anio_actual <- 2025L
+mes_anterior <- NA_integer_
+
+for (linea in lineas) {
+
+  linea <- str_trim(linea)
+
+  # Detectar el inicio y el final de la fase liga
+  if (str_detect(linea, "^▪ League,")) {
+    en_liga <- TRUE
+    jornada <- as.integer(
+      str_extract(linea, "\\d+$")
+    )
+    next
+  }
+
+  if (str_detect(linea, "^▪ (Playoffs|Finals)")) {
+    en_liga <- FALSE
+  }
+
+  if (!en_liga || linea == "") next
+
+  # Detectar las fechas: Tue Sep 16 2025, Wed Sep 17, etc.
+  patron_fecha <- paste0(
+    "^[A-Z][a-z]{2} ([A-Z][a-z]{2}) ",
+    "(\\d{1,2})(?: (\\d{4}))?$"
+  )
+
+  if (str_detect(linea, patron_fecha)) {
+
+  partes <- str_match(linea, patron_fecha)
+
+  mes <- meses[partes[2]]
+  mes_num <- as.integer(mes)
+  dia <- as.integer(partes[3])
+
+  # Si el TXT especifica el año, utilizarlo.
+  # Si no, detectar el cambio de diciembre a enero.
+  if (!is.na(partes[4])) {
+    anio_actual <- as.integer(partes[4])
+  } else if (
+    !is.na(mes_anterior) &&
+    mes_anterior == 12 &&
+    mes_num == 1
+  ) {
+    anio_actual <- anio_actual + 1L
+  }
+
+  fecha_actual <- as.Date(sprintf(
+    "%04d-%02d-%02d",
+    anio_actual, mes_num, dia
+  ))
+
+  mes_anterior <- mes_num
+
+  next
+}
+
+  # Detectar los partidos y sus marcadores
+  patron_partido <- paste0(
+    "^\\s*(?:\\d{2}:\\d{2}\\s+)?",
+    "(.+?)\\s+v\\s+(.+?)\\s+",
+    "(\\d+)-(\\d+)"
+  )
+
+  partes <- str_match(linea, patron_partido)
+
+  if (!is.na(partes[1])) {
+
+    partidos[[length(partidos) + 1]] <- tibble(
+      fecha = fecha_actual,
+      jornada = jornada,
+      local = str_trim(partes[2]),
+      visitante = str_trim(partes[3]),
+      goles_local = as.integer(partes[4]),
+      goles_visitante = as.integer(partes[5])
+    )
+  }
+}
+
+calendario <- bind_rows(partidos)
+
+stopifnot(nrow(calendario) == 144)
+
+head(calendario)
+```
+
+```{r}
+
+partidos_equipo <- bind_rows(
+  calendario %>%
+    transmute(
+      equipo = local,
+      rival = visitante,
+      fecha
+    ),
+  calendario %>%
+    transmute(
+      equipo = visitante,
+      rival = local,
+      fecha
+    )
+)
+
+names(partidos_equipo)
+
+```
+
+```{r}
+
+partidos_equipo <- partidos_equipo %>%
+  arrange(equipo, fecha) %>%
+  group_by(equipo) %>%
+  mutate(
+    dias_descanso = as.numeric(
+      fecha - lag(fecha)
+    ) - 1
+  ) %>%
+  ungroup()
+
+resumen_descanso <- partidos_equipo %>%
+  group_by(equipo) %>%
+  summarise(
+    descanso_promedio = mean(
+      dias_descanso, na.rm = TRUE
+    ),
+    descanso_minimo = min(
+      dias_descanso, na.rm = TRUE
+    ),
+    partidos_descanso_corto = sum(
+      dias_descanso <= 3, na.rm = TRUE
+    ),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(descanso_promedio))
+
+```
