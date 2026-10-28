@@ -1,9 +1,40 @@
 ---
-title: "Proyecto Individual Ca-204"
+title: "Proyecto Individual CA-0204"
 format: typst
 editor: visual
 echo: False
 ---
+Santiago Jara Vargas
+C5G155
+2026
+
+## Introducción
+
+
+## Objetivo
+
+## Metodología
+
+## Resultados
+
+## Referencias
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## Pregunta
 
@@ -33,7 +64,7 @@ library(stringr)
 library(tibble)
 
 lineas <- readLines(
-  "champions_league_2025_26.txt",
+  "../data/champions_league_2025_26.txt",
   encoding = "UTF-8"
 )
 
@@ -212,7 +243,7 @@ dificultad <- dificultad %>%
 
 ```{r}
 
-archivo <- "champions_league_2025_26.txt"
+archivo <- "../data/champions_league_2025_26.txt"
 
 lineas <- readLines(archivo, encoding = "UTF-8")
 
