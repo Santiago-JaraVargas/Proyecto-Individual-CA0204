@@ -4,37 +4,56 @@ format: typst
 editor: visual
 echo: False
 ---
-Santiago Jara Vargas
-C5G155
+
+Santiago Jara Vargas\
+C5G155\
 2026
 
 ## Introducción
 
+La Champions League es el nombre del torneo europeo más importante del futbol; este reune a los mejores equipos de las mejores ligas de la región, entre ellas la Liga española, la Premier League, Serie A, entre otras ligas del viejo continente. En este torneo desde la temporada 2024/2025 se implementó un nuevo formato en donde se aumento la cantidad de equipos a 36 y en donde primeramente se juega una fase de liga, cada equipo juega 8 partidos y al final los mejores 8 posisionados se clasifican directamente a la siguiente fase, los equipos entre los puestos 9 y 24 juegan los playoffs para calsificarse a la siguiente ronda; para este proyecto nos vamos a centrar únicamente en la fase de liga. En esta fase a pesar de que todos los equipos juegan 8 partidos, los rivales no son los mismos para ninguno: los 36 equipos se dividen en cuatro grupos según sus coeficientes UEFA (rendimiento en competiciones europeas); mediante un sorteo por computadara a cada equipo se le asigna 2 rivales de cada grupo y contra uno juegan de local y contra el otro de visitante. Este formato según la UEFA busca distribuir de manera equitativa los enfrentamientos y que los clubes tengan un calendario con dificultad equilibrada.
+
+A pesar de que se busca la igualdad de exigencia en los calendarios, se nos presenta la duda de que tan verdadera es esta igualdad. El hecho de enfrentar un rival de mayor nivel, puede representar una mayor dificultad en terminos competitivos. Por eso contar con una medida de dificultad que permita comparar los calendarios desde una perspectiva más objetiva y que tenga en cuenta al menos las variables más importantes sería útil. A pesar de eso, el futbol no es un deporte que sea fácilmente predecible, existen demasiadas variables que pueden determinar si un equipo sale victorioso ante otro que no pueden ser consideradas en los modelos matemáticos.
+
+Ante estas razones en este proyecto lo que se busca es analizar el calendario de la temporada 2025/2026 de la Champions League, a través de un indicador que toma en cuenta la puntuación de Elo de los equipo participes y el factor de localía que juega un papel importante en el desempeño de los equipos, para poder dar un valor y analizar la diicultad de los distintos calendarios de los equipos. Además como se menciono anteriormente no todo es medible numéricamente, por lo que también es buena idea comparar los resultados del indicador con el verdadero ranking final del torneo.
 
 ## Objetivo
 
+### Obejtivo General:
+
+Analizar la dificultad de los calendarios de los equipos particpantes en la fase de liga de la UEFA Champions League 2025/2026
+
+## Objetivos específicos:
+
+-Construir un indicador que permita estimar la dificultad de los calendarios de los equipos, considerando las puntuaciones Elo de los rivales y el faactor de localía.
+
+-Comparar los resultados obtenidos mediante el indicador con la clasificación final de la fase de liga
+
 ## Metodología
+
+Para estimar la dificultad de los calendarios de la fase de liga de la UEFA Champions League 2025/2026, se construyó un indicador basado en el sistema de puntuación Elo. Este sistema permite estimar la fuerza relativa de dos equipos mediante sus puntuaciones, de manera que una mayor diferencia entre estas representa una mayor ventaja esperada para el equipo con la puntuación más alta. Su aplicación en el fútbol ha sido estudiada por Hvattum y Arntzen (2010).
+
+El primer paso consiste en obtener las puntuaciones Elo de los 36 equipos participantes. Posteriormente, se calcula el resultado esperado de cada enfrentamiento mediante la siguiente expresión:
+
+$$P_{ij}=\frac{1}{1+10^{\frac{E_j-E_i}{400}}}$$
+
+Donde $E_i$ representa la puntuación Elo del equipo evaluado y $E_j$ la puntuación Elo de su rival. Los parámetros 10 y 400 corresponden a la especificación del modelo Elo utilizada en el material complementario de Arntzen y Hvattum. Es importante señalar que este resultado representa una puntuación esperada, no una probabilidad exacta de victoria o derrota.
+
+Adicionalmente, se incorpora el factor de localía, debido a que jugar en casa puede representar una ventaja competitiva. Para ello, se establece un ajuste de 100 puntos Elo $(H=100)$, que se suma a la puntuación del equipo que juega como local. De esta manera, la expresión utilizada para calcular la dificultad de cada enfrentamiento es:
+
+$$d_{ij}=\frac{100}{1+10^{\frac{E_i-E_j+H}{400}}}$$
+
+Finalmente, se calcula la dificultad de cada calendario mediante el promedio de los valores obtenidos en sus ocho enfrentamientos:
+
+$$D_i=\frac{1}{8}\sum_{j=1}^{8} d_{ij}$$
+
+El indicador resultante permite comparar la exigencia estimada de los calendarios de los 36 equipos. Un valor más alto representa un calendario más difícil, mientras que un valor más bajo indica una menor dificultad estimada.
+
+Como complemento, los resultados del indicador se contrastan con la clasificación final de la fase de liga 2025/2026. Esta comparación permite explorar la relación entre la dificultad estimada de los calendarios y el desempeño de los equipos, considerando que existen otros factores deportivos que también influyen en los resultados de los partidos.
 
 ## Resultados
 
 ## Referencias
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 ## Pregunta
 
