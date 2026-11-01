@@ -23,7 +23,7 @@ Ante estas razones en este proyecto lo que se busca es analizar el calendario de
 
 Analizar la dificultad de los calendarios de los equipos particpantes en la fase de liga de la UEFA Champions League 2025/2026
 
-## Objetivos específicos:
+### Objetivos específicos:
 
 -Construir un indicador que permita estimar la dificultad de los calendarios de los equipos, considerando las puntuaciones Elo de los rivales y el faactor de localía.
 
@@ -258,6 +258,9 @@ dificultad <- bind_rows(
 
 dificultad <- dificultad %>% 
   mutate(D= round(D,2))
+
+dificultad <- dificultad %>% 
+  mutate(posicion.dificultad= 37-row_number())
 ```
 
 ```{r}
@@ -415,3 +418,71 @@ resumen_descanso <- partidos_equipo %>%
   arrange(desc(descanso_promedio))
 
 ```
+
+```{r}
+library(readxl)
+tabla.resultados <- read_excel("../data/tabla_resultados_champions_25_26.xlsx")
+
+tabla.final <- tabla.resultados %>%
+  inner_join(dificultad, by = "equipo") %>% 
+  mutate(posicion.real=row_number())
+```
+
+```{r}
+library(ggplot2)
+library(ggrepel)
+
+
+# Seleccionar los 3 equipos con menor y mayor dificultad
+etiquetas <- bind_rows(
+  tabla.final %>% slice_min(D, n = 3),
+  tabla.final %>% slice_max(D, n = 3)
+) %>%
+  distinct(equipo, .keep_all = TRUE)
+
+
+ggplot(tabla.final, 
+       aes(x = D, y = posicion.real)) +
+
+  # Todos los equipos
+  geom_point(size = 2.5, color = "steelblue") +
+
+  # Resaltar los equipos seleccionados
+  geom_point(data = etiquetas,
+             color = "red",
+             size = 3.5) +
+
+  # Nombres de los equipos seleccionados
+  geom_text_repel(
+    data = etiquetas,
+    aes(label = equipo),
+    size = 3.5,
+    max.overlaps = Inf,
+    box.padding = 0.8,
+    point.padding = 0.5
+  ) +
+
+  # Línea de tendencia
+  geom_smooth(
+    method = "lm",
+    se = FALSE,
+    color = "gray40",
+    linetype = "dashed"
+  ) +
+
+  scale_y_reverse(
+    breaks = c(1, 5, 10, 15, 20, 25, 30, 36)
+  ) +
+
+  labs(
+    title = "Dificultad del calendario y posición final",
+    subtitle = "UEFA Champions League 2025/26",
+    x = "Índice de dificultad (D)",
+    y = "Posición final",
+    caption = "Elaboración propia"
+  ) +
+
+  theme_minimal()
+```
+
+
