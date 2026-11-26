@@ -1,0 +1,435 @@
+---
+title: "Dificultad de los calendarios de la UEFA Champions League 2025/2026"
+lang: es
+format:
+  pdf:
+    pdf-engine: xelatex
+    fontsize: 12pt
+execute:
+  echo: false
+  warning: false
+  message: false
+editor: visual
+---
+
+```{r}
+#Todas las librerias usadas
+library(dplyr)
+library(stringr)
+library(tibble)
+library(kableExtra)
+library(ggplot2)
+library(ggrepel)
+library(readxl)
+```
+
+Santiago Jara Vargas\
+C5G155\
+2026
+
+## Introducción
+
+La UEFA Champions League es la principal competición de clubes de fútbol europeo. Desde la temporada 2024/2025, el torneo implementó un nuevo formato que aumentó la participación a 36 equipos, los cuales disputan una fase de liga de ocho partidos. Los participantes se distribuyen en cuatro bombos según sus coeficientes UEFA y enfrentan a dos equipos de cada bombo, uno como local y otro como visitante. Al finalizar esta etapa, los ocho mejores equipos clasifican directamente a octavos de final, mientras que los ubicados entre las posiciones 9 y 24 disputan una ronda de playoffs (UEFA, 2024).
+
+Aunque el formato tiene como objetivo distribuir equitativamente la exigencia de los calendarios, los equipos no necesariamente enfrentan rivales de igual fortaleza. Por esta razón, resulta útil construir un indicador que permita comparar la dificultad de sus enfrentamientos. Este proyecto analiza la fase de liga de la temporada 2025/2026 mediante un indicador basado en las puntuaciones Elo de los equipos y el factor de localía. Finalmente, se comparan los resultados obtenidos con la clasificación final para analizar la relación entre la dificultad de los calendarios y el desempeño real.
+
+## Objetivo
+
+### Objetivo General:
+
+Analizar la dificultad de los calendarios de los equipos participantes en la fase de liga de la UEFA Champions League 2025/2026
+
+### Objetivos específicos:
+
+- Construir un indicador que permita estimar la dificultad relativa de los calendarios considerando las puntuaciones Elo de los equipos, sus rivales y el factor de localía.
+
+- Comparar los resultados del indicador con la clasificación final de la fase de liga para identificar posibles relaciones entre la dificultad del calendario y el desempeño de los equipos.
+
+## Metodología
+
+La dificultad de los calendarios se estima mediante el sistema de puntuación Elo, cuya aplicación en el fútbol ha sido estudiada por Hvattum y Arntzen (2010). El indicador mide la dificultad relativa del calendario, pues considera tanto la fortaleza del equipo evaluado como la de sus rivales.
+
+Se utilizaron los datos de OpenFootball (s. f.) correspondientes a los 144 partidos de la fase de liga de la UEFA Champions League 2025/2026, disputados entre 36 equipos. Las puntuaciones Elo se obtuvieron de EloFootball (s. f.), considerando el último registro de cada equipo previo a su primer partido de la fase de liga. La clasificación final se obtuvo del sitio web oficial de la UEFA (s. f.).
+
+Para cada enfrentamiento se consideran las puntuaciones Elo del equipo evaluado $E_i$ y su rival $E_j$, incorporando como supuesto del modelo un ajuste por localía de $H=100$ puntos Elo. Las puntuaciones ajustadas se definen como:
+
+$$E_i^*=E_i+HI(i\text{ es local}), \qquad
+E_j^*=E_j+HI(j\text{ es local})$$
+
+donde $I$ toma el valor de 1 si se cumple la condición y 0 en caso contrario. La dificultad de cada enfrentamiento se calcula mediante:
+
+$$d_{ij}=\frac{100}{1+10^{\frac{E_i^*-E_j^*}{400}}}$$
+
+Los parámetros 10 y 400 corresponden a la especificación Elo utilizada por Arntzen y Hvattum (2021). El resultado representa la puntuación esperada del rival en una escala de 0 a 100, no su probabilidad de victoria.
+
+El indicador de dificultad del calendario se obtiene promediando los ocho enfrentamientos:
+
+$$D_i=\frac{1}{8}\sum_{j=1}^{8}d_{ij}$$
+
+Un mayor valor de $D_i$ indica una mayor dificultad relativa. Finalmente, se utiliza el coeficiente de correlación de Spearman para evaluar la asociación monotónica entre el indicador y la clasificación final de la fase de liga. El ranking de dificultad asigna la posición 1 al calendario de menor dificultad relativa y la posición 36 al de mayor dificultad.
+
+```{r,message=FALSE,warning=FALSE}
+
+lineas <- readLines(
+  "../data/champions_league_2025_26.txt",
+  encoding = "UTF-8"
+)
+
+jornada <- NA_integer_
+en_liga <- FALSE
+partidos <- list()
+
+for (linea in lineas) {
+
+  # Detectar el inicio de la fase de liga
+  if (str_detect(linea, "^▪ League,")) {
+    en_liga <- TRUE
+    jornada <- as.integer(str_extract(linea, "\\d+"))
+    next
+  }
+
+  # Detenerse al llegar a otra fase
+  if (str_detect(linea, "^▪ ") && en_liga) {
+    en_liga <- FALSE
+  }
+
+  # Actualizar la jornada
+  if (en_liga &&
+      str_detect(linea, "League, Matchday")) {
+    jornada <- as.integer(str_extract(linea, "\\d+"))
+  }
+
+  # Extraer únicamente partidos de la fase de liga
+  if (en_liga &&
+      str_detect(linea, "\\bv\\b") &&
+      str_detect(linea, "\\d+-\\d+")) {
+
+    patron <- paste0(
+      "^\\s*(?:\\d{2}:\\d{2}\\s+)?",
+      "(.+?)\\s+v\\s+",
+      "(.+?)\\s+",
+      "(\\d+)-(\\d+)"
+    )
+
+    resultado <- str_match(linea, patron)
+
+    if (!is.na(resultado[1, 1])) {
+      partidos[[length(partidos) + 1]] <- tibble(
+        jornada = jornada,
+        local = str_trim(resultado[1, 2]),
+        visitante = str_trim(resultado[1, 3]),
+        goles_local = as.integer(resultado[1, 4]),
+        goles_visitante = as.integer(resultado[1, 5])
+      )
+    }
+  }
+}
+
+calendario <- bind_rows(partidos)
+```
+
+```{r}
+elo <- tribble(
+  ~equipo, ~elo,
+  "Athletic Club (ESP)", 2087,
+  "Arsenal FC (ENG)", 2277,
+  "PSV (NED)", 2083,
+  "Royale Union Saint-Gilloise (BEL)", 2050,
+  "Juventus FC (ITA)", 2100,
+  "Borussia Dortmund (GER)", 2178,
+  "Sport Lisboa e Benfica (POR)", 2154,
+  "Qarabağ Ağdam FK (AZE)", 1789,
+  "Tottenham Hotspur FC (ENG)", 2085,
+  "Villarreal CF (ESP)", 2099,
+  "Real Madrid CF (ESP)", 2268,
+  "Olympique de Marseille (FRA)", 2028,
+  "SK Slavia Praha (CZE)", 2045,
+  "FK Bodø/Glimt (NOR)", 1936,
+  "PAE Olympiakos SFP (GRE)", 2060,
+  "Paphos FC (CYP)", 1845,
+  "AFC Ajax (NED)", 1936,
+  "FC Internazionale Milano (ITA)", 2221,
+  "Liverpool FC (ENG)", 2295,
+  "Club Atlético de Madrid (ESP)", 2164,
+  "Paris Saint-Germain FC (FRA)", 2334,
+  "Atalanta BC (ITA)", 2115,
+  "FC Bayern München (GER)", 2265,
+  "Chelsea FC (ENG)", 2220,
+  "FC København (DEN)", 1976,
+  "Bayer 04 Leverkusen (GER)", 2146,
+  "Club Brugge KV (BEL)", 2094,
+  "AS Monaco FC (MCO)", 2054,
+  "Newcastle United FC (ENG)", 2147,
+  "FC Barcelona (ESP)", 2317,
+  "Manchester City FC (ENG)", 2225,
+  "SSC Napoli (ITA)", 2143,
+  "Eintracht Frankfurt (GER)", 2075,
+  "Galatasaray SK (TUR)", 2072,
+  "Sporting Clube de Portugal (POR)", 2127,
+  "FK Kairat (KAZ)", 1659
+)
+
+```
+
+```{r}
+# Calcula la dificultad relativa de un enfrentamiento
+# a partir de las puntuaciones Elo y la localía.
+
+# Recibe:
+# equipo1: equipo evaluado.
+# equipo2: equipo rival.
+# H: ajuste Elo por localía.
+
+# Devuelve:
+# Índice de dificultad entre 0 y 100.
+
+calcular.d <- function(equipo1,equipo2,H=100){
+  elo.1 <- elo$elo[elo$equipo==equipo1]
+  elo.2 <- elo$elo[elo$equipo==equipo2]
+  
+  partido <- calendario[(calendario$local == equipo1 & calendario$visitante == equipo2) |
+                        (calendario$local == equipo2 &calendario$visitante == equipo1),
+                       ]  
+  
+  if (nrow(partido) != 1) {
+    stop("No se encontró un partido único entre esos equipos.")
+  }
+  if (partido$local == equipo1) {
+    elo.1 <- elo.1 + H
+  } else {
+    elo.2 <- elo.2 + H
+  }
+  
+  factor.elo <- 100 / (1 + 10^((elo.1 - elo.2) / 400))
+
+  return(factor.elo)
+
+}
+
+
+```
+
+```{r}
+calendario <- calendario %>% 
+  rowwise() %>% 
+  mutate(
+    d.local = calcular.d(local,visitante),
+    d.visitante= calcular.d(visitante,local)
+  ) %>% 
+  ungroup()
+```
+
+```{r}
+dificultad <- bind_rows(
+  calendario %>%
+    group_by(equipo = local) %>%
+    summarise(
+      D = mean(d.local),
+      n = n(),
+      .groups = "drop"
+    ),
+  calendario %>%
+    group_by(equipo = visitante) %>%
+    summarise(
+      D = mean(d.visitante),
+      n = n(),
+      .groups = "drop"
+    )
+) %>%
+  group_by(equipo) %>%
+  summarise(
+    D = mean(D),
+    n = sum(n),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(D))
+
+
+dificultad <- dificultad %>% 
+  mutate(posicion.dificultad = n() + 1 - row_number())
+```
+
+```{r}
+tabla.resultados <- read_excel("../data/tabla_resultados_champions_25_26.xlsx")
+
+tabla.final <- tabla.resultados %>%
+  mutate(posicion.real=row_number())%>% 
+  inner_join(dificultad, by = "equipo")
+
+correlacion <- cor(
+  tabla.final$D,
+  tabla.final$posicion.real,
+  method = "spearman"
+)
+```
+
+## Resultados
+
+### Diferencias en la dificultad de los calendarios
+
+```{r}
+#| echo: false
+valores <- c(
+  min(tabla.final$D, na.rm = TRUE),
+  quantile(tabla.final$D, 0.25, na.rm = TRUE),
+  median(tabla.final$D, na.rm = TRUE),
+  mean(tabla.final$D, na.rm = TRUE),
+  quantile(tabla.final$D, 0.75, na.rm = TRUE),
+  max(tabla.final$D, na.rm = TRUE),
+  sd(tabla.final$D, na.rm = TRUE)
+)
+
+tabla1 <- data.frame(
+  Estadístico = c(
+    "Mínimo",
+    "Primer cuartil",
+    "Mediana",
+    "Media",
+    "Tercer cuartil",
+    "Máximo",
+    "Desviación estándar"
+  ),
+  Valor = round(as.numeric(valores), 2)
+)
+tabla1 |>
+  mutate(
+    Valor = formatC(Valor, format = "f", digits = 2,
+                    decimal.mark = ",")
+  ) |>
+  kable(
+    format = "latex",
+    booktabs = TRUE,
+    row.names = FALSE,
+    col.names = c("Estadística", "Valor"),
+    align = c("l", "r"),
+    caption = "Estadísticas descriptivas del índice de dificultad del calendario"
+  ) |>
+  kable_styling(
+    latex_options = "hold_position",
+    full_width = FALSE,
+    font_size = 11,
+    
+  )
+```
+
+Los resultados del indicador muestran que la dificultad de los calendarios no estuvo distribuida de manera uniforme entre los equipos participantes. Según la Tabla 1, elaborada con datos de OpenFootball y EloFootball, los índices oscilaron entre 27,30 y 89,20 puntos, con una desviación estándar de 15,11. Esta amplitud evidencia que disputar la misma cantidad de partidos no implica una exigencia competitiva equivalente, debido a las diferencias en la fortaleza de los equipos, sus rivales y la condición de local o visitante.
+
+Al comparar los extremos de la distribución, se observa que el FK Kairat obtuvo un índice de 89,20, mientras que Liverpool registró 27,30. Esta diferencia de 61,90 puntos evidencia distintos niveles de exigencia relativa, considerando tanto la fortaleza propia de los equipos como la de sus rivales.
+
+Por otra parte, la media del indicador fue de 50 puntos y la mediana de 49,36. La proximidad entre ambos valores muestra que la distribución se encuentra centrada alrededor de 50. Sin embargo, es importante considerar que la media de 50 también responde a la construcción matemática del indicador: en cada enfrentamiento, la dificultad asignada a ambos equipos suma 100 puntos, por lo que el promedio general queda determinado por esta propiedad del modelo.
+
+El 50 % central de los equipos presentó índices de dificultad entre 38,59 y 58,61 puntos, con un rango intercuartílico de 20,02 puntos. Esto indica que existen diferencias en la exigencia relativa incluso entre los equipos que no se encuentran en los extremos de la distribución.
+
+### Relación entre la dificultad del calendario y el desempeño de los equipos
+
+```{r,message=FALSE}
+#| echo: false
+#| message: false
+#| warning: false
+#| fig-cap: "Comparación entre la posición según el índice de dificultad y la posición final de los equipos."
+#| fig-align: center
+#| fig-width: 6
+#| fig-height: 3.5
+
+
+# Calcular diferencias entre posiciones
+tabla.final <- tabla.final %>%
+  mutate(
+    diferencia.posicion = posicion.dificultad - posicion.real
+  )
+
+# Seleccionar los 4 equipos con mayores y menores diferencias
+etiquetas <- bind_rows(
+  tabla.final %>% slice_min(diferencia.posicion, n = 4),
+  tabla.final %>% slice_max(diferencia.posicion, n = 4)
+) %>%
+  distinct(equipo, .keep_all = TRUE)
+
+ggplot(tabla.final,
+       aes(x = posicion.dificultad, y = posicion.real)) +
+
+  geom_point(
+    size = 2.5,
+    color = "steelblue"
+  ) +
+
+  geom_point(
+    data = etiquetas,
+    color = "red",
+    size = 3.5
+  ) +
+
+  geom_text_repel(
+    data = etiquetas,
+    aes(label = equipo),
+    size = 3,
+    max.overlaps = Inf,
+    box.padding = 0.6,
+    point.padding = 0.4
+  ) +
+
+  geom_abline(
+    intercept = 0,
+    slope = 1,
+    color = "gray60",
+    linetype = "dashed"
+  ) +
+
+  geom_smooth(
+    method = "lm",
+    se = FALSE,
+    color = "gray35",
+    linetype = "solid"
+  ) +
+
+  scale_x_reverse(breaks = seq(1, 36, by = 5)) +
+
+  scale_y_reverse(breaks = seq(1, 36, by = 5)) +
+
+  labs(
+    title = "Dificultad del calendario y posición final",
+    subtitle = "UEFA Champions League 2025/26",
+    x = "Ranking de dificultad relativa",
+    y = "Posición final",
+    caption = "Fuente: OpenFootball, EloFootball y UEFA. Elaborado con ChatGPT."
+  ) +
+
+  theme_minimal() +
+
+  theme(
+    plot.title = element_text(face = "bold", size = 13),
+    plot.subtitle = element_text(size = 10),
+    axis.title = element_text(size = 10),
+    panel.grid.minor = element_blank()
+  )
+```
+
+Como se observa en la Figura 1, los equipos que enfrentaron calendarios de mayor dificultad relativa tendieron a finalizar en posiciones menos favorables. Esta relación se evaluó mediante el coeficiente de correlación de Spearman, cuyo resultado fue de 0,7308, lo que indica una asociación positiva fuerte entre ambas variables. La línea discontinua representa la coincidencia entre ambos rankings, mientras que los puntos rojos identifican los equipos con mayores diferencias entre sus posiciones.
+
+Sin embargo, parte de esta asociación podría explicarse por la incorporación del Elo propio de cada equipo en el indicador, debido a que los equipos de mayor fortaleza tienden a presentar menores índices de dificultad y mejores resultados deportivos. Por tanto, la asociación encontrada no permite determinar el efecto individual de la dificultad de los rivales sobre la clasificación final.
+
+### Diferencias entre la dificultad estimada y el desempeño real
+
+Como se observa en la Figura 1, equipos como Tottenham Hotspur, Sporting de Portugal, Qarabağ y Bodø/Glimt obtuvieron posiciones más favorables respecto a su ranking de dificultad. Por el contrario, Villarreal, Napoli, Benfica y Eintracht Frankfurt presentaron clasificaciones menos favorables. Estas diferencias evidencian que la dificultad relativa del calendario no explica por sí sola el desempeño deportivo, por lo que otros factores, como el rendimiento colectivo, las lesiones y las decisiones tácticas, podrían influir en los resultados.
+
+## Conclusiones
+
+En conjunto, el indicador construido permitió identificar diferencias en la exigencia relativa de los calendarios y una asociación positiva fuerte con la clasificación final (0,7308). Sin embargo, esta relación también responde a la fortaleza propia de los equipos, por lo que una evaluación más completa del rendimiento competitivo requiere considerar otros factores que van más allá de las puntuaciones Elo y la ventaja de jugar como local.
+
+\newpage
+
+## Referencias
+
+Arntzen, H., & Hvattum, L. M. (2021). *Supplementary material for “Predicting match outcomes in association football using team ratings and player ratings”* \[Material complementario\]. <https://www.statmod.org/smij/Vol21/Iss5/Arntzen/Supplement.pdf>
+
+EloFootball. (s. f.). *European football Elo ratings*. <https://www.elofootball.com/>
+
+Hvattum, L. M., & Arntzen, H. (2010). Using ELO ratings for match result prediction in association football. *International Journal of Forecasting, 26*(3), 460–470. <https://www.sciencedirect.com/science/article/abs/pii/S0169207009001708?via%3Dihub>
+
+OpenFootball. (s. f.). *UEFA Champions League 2025/26* \[Conjunto de datos\]. GitHub. <https://github.com/openfootball/champions-league/blob/master/2025-26/cl.txt?>
+
+UEFA. (s. f.). *Clasificación de la fase liga de la UEFA Champions League 2025/26*.
+
+<https://es.uefa.com/uefachampionsleague/history/seasons/2026/groups/>
+
+UEFA. (2024). *El nuevo formato de la Champions League: el método y las modalidades del sorteo*. <https://es.uefa.com/uefachampionsleague/news/0290-1b9c290eb2a7-09ce4b1a7915-1000--el-nuevo-formato-de-la-champions-league-el-metodo-y-las-m/>
