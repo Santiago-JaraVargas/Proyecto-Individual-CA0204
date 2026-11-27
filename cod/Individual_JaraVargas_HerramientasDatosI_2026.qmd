@@ -433,3 +433,9 @@ UEFA. (s. f.). *Clasificación de la fase liga de la UEFA Champions League 2025/
 <https://es.uefa.com/uefachampionsleague/history/seasons/2026/groups/>
 
 UEFA. (2024). *El nuevo formato de la Champions League: el método y las modalidades del sorteo*. <https://es.uefa.com/uefachampionsleague/news/0290-1b9c290eb2a7-09ce4b1a7915-1000--el-nuevo-formato-de-la-champions-league-el-metodo-y-las-m/>
+
+## Anexos
+
+Link al repositorio de github:
+
+<https://github.com/Santiago-JaraVargas/Proyecto-Individual-CA0204.git>
